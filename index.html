@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  ============================================================
+  Akuma Clean · index.html
+  App interna de pedidos, reparto y cobranzas.
+  Publicar la carpeta "web" en GitHub Pages (o cualquier hosting).
+  Desarrollado por AkumaNet. Todos los derechos reservados.
+  Autor: Juan Carlos Ojeda · Tel. 11 6033-1552.
+  ============================================================
+-->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Akuma Clean</title>
+  <meta name="description" content="Pedidos, preparación, reparto y cobranzas de la química. Desarrollado por AkumaNet.">
+  <meta name="author" content="Juan Carlos Ojeda (AkumaNet)">
+  <meta name="theme-color" content="#111111">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Akuma Clean">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="favicon-64.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="estilos.css">
+  <style id="estilo-pagina">@page { size: A4; margin: 14mm; }</style>
+</head>
+<body>
+  <div id="raiz"></div>
+  <div id="imprimir"></div>
+  <script src="config.js"></script>
+  <script src="core.js"></script>
+  <script src="demo.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js'); });
+    }
+  </script>
+</body>
+</html>
