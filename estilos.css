@@ -574,4 +574,28 @@ td.editando, td.editando:hover { background: transparent; box-shadow: none; padd
 .envasar-lnk svg { width: 13px; height: 13px; }
 /* Pedidos de la tienda online */
 .chip.web { background: #0e9fb4; color: #fff; font-size: .66rem; padding: 1px 7px; vertical-align: 1px; }
+/* ---------- Recorrido de reparto: Maps, Waze, llamar ---------- */
+.llegar { gap: 6px; }
+.llegar .btn svg { width: 15px; height: 15px; }
+.recorrido-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.paradas { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.parada { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+.nro-parada { width: 30px; height: 30px; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .9rem; }
+.parada-cuerpo { display: grid; gap: 4px; min-width: 0; }
+.parada-dir { font-size: .92rem; }
+.parada-cobrar { font-size: .86rem; color: var(--danger); }
+.hoja-imprimir { margin-top: 14px; }
+.hoja-imprimir summary { cursor: pointer; color: var(--muted); font-size: .86rem; margin-bottom: 8px; }
+@media (max-width: 860px) { .parada .llegar .btn { flex: 1 1 auto; min-height: 40px; } }
+/* ---------- Fórmulas en porcentaje ---------- */
+.modo-form { align-items: flex-end; gap: 12px; }
+.pct-in { display: inline-flex; align-items: center; gap: 4px; }
+.pct-in input { width: 78px; }
+.pct-in i { font-style: normal; color: var(--muted); font-weight: 600; }
+tr.fo-resto td { background: var(--brand-soft); }
+tr.fo-total td { border-top: 2px solid var(--border); }
+tr.fo-total.ok td:nth-child(2) b { color: var(--ok); }
+tr.fo-total.mal td { color: var(--danger); }
+.completa { border: 1px dashed var(--border); background: none; color: var(--muted); border-radius: 999px; font: inherit; font-size: .72rem; padding: 1px 8px; margin-top: 4px; cursor: pointer; }
+.completa.si { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
 /* FIN DE estilos.css · Akuma Clean by AkumaNet */
