@@ -52,8 +52,8 @@ var QG = (function () {
       num: ['precioEnvase', 'cantidadEnvase', 'densidad', 'stock', 'stockMinimo']
     },
     Formulas: {
-      cols: ['id', 'nombre', 'ingredientes', 'rinde', 'extras', 'presentaciones', 'margenMay', 'margenMin', 'actualizarCosto', 'notas', 'activo', 'creado', 'actualizado'],
-      num: ['rinde', 'margenMay', 'margenMin'], json: ['ingredientes', 'extras', 'presentaciones']
+      cols: ['id', 'nombre', 'ingredientes', 'rinde', 'extras', 'presentaciones', 'margenMay', 'margenMin', 'actualizarCosto', 'notas', 'activo', 'creado', 'actualizado', 'modo', 'densidad'],
+      num: ['rinde', 'margenMay', 'margenMin', 'densidad'], json: ['ingredientes', 'extras', 'presentaciones']
     },
     Actividad: { cols: ['id', 'fecha', 'usuarioId', 'usuarioNombre', 'accion', 'detalle'] },
     Rendiciones: {
@@ -975,6 +975,37 @@ var QG = (function () {
     if (ins.unidad === 'L') return u.d === 'masa' ? c / dens : c;
     return num(cantidad);
   }
+  /**
+   * FÓRMULAS EN PORCENTAJE (modo 'pct'): cada ingrediente es un % del peso
+   * total de la tanda (18 g en 1 kg = 1,8 %). Los gramos salen de:
+   *   tanda (L) × densidad del producto terminado (kg/L, 1 si no se sabe) × 1000 × % / 100
+   * Un ingrediente puede ser "resto" (el agua): completa lo que falta para 100 %.
+   * Los insumos que se cuentan por unidad (u) siguen con su cantidad fija.
+   * Se guardan los gramos calculados, así costos y producción funcionan igual.
+   */
+  function gramosTanda(f) { return num(f.rinde) * (num(f.densidad) || 1) * 1000; }
+  function resolverPorcentajes(f) {
+    if (!f || f.modo !== 'pct') return { total: 0, fijos: 0, resto: null };
+    var total = gramosTanda(f), fijos = 0, resto = null;
+    (f.ingredientes || []).forEach(function (it) {
+      if (it.unidad === 'u') return;
+      if (it.resto && !resto) resto = it; else { it.resto = false; fijos += num(it.pct); }
+    });
+    if (resto) resto.pct = Math.max(0, Math.round((100 - fijos) * 10000) / 10000);
+    (f.ingredientes || []).forEach(function (it) {
+      if (it.unidad === 'u') return;
+      it.cantidad = Math.round(num(it.pct) * total / 100 * 100) / 100;
+      it.unidad = 'g';
+    });
+    return { total: Math.round((fijos + (resto ? resto.pct : 0)) * 10000) / 10000, fijos: fijos, resto: resto };
+  }
+  /** Gramos de un ingrediente cargado en otra unidad (para pasar una fórmula vieja a %). */
+  function aGramos(cantidad, unidad, ins) {
+    var u = FACTOR_UNIDAD[unidad];
+    if (!u || u.d === 'u') return 0;
+    var c = num(cantidad) * u.f; // kg o L
+    return (u.d === 'vol' ? c * (num(ins && ins.densidad) || 1) : c) * 1000;
+  }
   /** Costo completo de una fórmula: tanda, por litro y detalle por ingrediente. */
   function costoFormula(f, insumos, dolar) {
     var idx = {};
@@ -1118,11 +1149,14 @@ var QG = (function () {
     if (!(num(x.rinde) > 0)) throw err('VALIDACION', 'Indicá cuántos litros rinde la tanda.');
     var insumos = db.all('Insumos'), productos = db.all('Productos');
     var previo = x.id ? porId(db.all('Formulas'), x.id) : null;
+    var modo = x.modo === 'pct' ? 'pct' : 'cant';
     var f = {
-      id: previo ? previo.id : nuevoId(db), nombre: nombre,
+      id: previo ? previo.id : nuevoId(db), nombre: nombre, modo: modo, densidad: num(x.densidad, 0, 3) || 1,
       ingredientes: (Array.isArray(x.ingredientes) ? x.ingredientes : []).slice(0, 60).map(function (i) {
-        return { insumoId: txt(i.insumoId, 32), cantidad: num(i.cantidad, 0), unidad: FACTOR_UNIDAD[i.unidad] ? i.unidad : 'kg' };
-      }).filter(function (i) { return porId(insumos, i.insumoId) && i.cantidad > 0; }),
+        var o = { insumoId: txt(i.insumoId, 32), cantidad: num(i.cantidad, 0), unidad: FACTOR_UNIDAD[i.unidad] ? i.unidad : 'kg' };
+        if (modo === 'pct' && o.unidad !== 'u') { o.pct = num(i.pct, 0, 100); o.resto = i.resto === true; }
+        return o;
+      }).filter(function (i) { return porId(insumos, i.insumoId) && (i.unidad === 'u' || modo !== 'pct' ? i.cantidad > 0 : i.pct > 0 || i.resto); }),
       rinde: num(x.rinde, 0),
       extras: { minutos: num((x.extras || {}).minutos, 0), valorHora: num((x.extras || {}).valorHora, 0), otros: num((x.extras || {}).otros, 0) },
       presentaciones: (Array.isArray(x.presentaciones) ? x.presentaciones : []).slice(0, 20).map(function (p) {
@@ -1138,6 +1172,12 @@ var QG = (function () {
       creado: previo ? previo.creado : db.now(), actualizado: db.now()
     };
     if (!f.ingredientes.length) throw err('VALIDACION', 'Agregá al menos un ingrediente.');
+    if (modo === 'pct') {
+      var r = resolverPorcentajes(f);
+      if (r.fijos > 100.0001) throw err('VALIDACION', 'Los porcentajes suman ' + redondear(r.fijos) + ' %: se pasan del 100 %. Revisalos.');
+      if (Math.abs(r.total - 100) > 0.05) throw err('VALIDACION', 'Los porcentajes suman ' + redondear(r.total) + ' % y tienen que sumar 100 %. Marcá el agua como "completa al 100 %" o corregí los valores.');
+      f.ingredientes = f.ingredientes.filter(function (i) { return i.cantidad > 0; });
+    }
     db.put('Formulas', f);
     var n = recalcularCostos(db);
     return { id: f.id, mensaje: 'Fórmula guardada.' + (n ? ' Costo actualizado en ' + n + ' producto' + (n > 1 ? 's' : '') + '.' : '') };
@@ -1180,7 +1220,13 @@ var QG = (function () {
     var idxIns = {}, consumo = {};
     insumos.forEach(function (i) { idxIns[i.id] = i; });
     var sumar = function (insumoId, cant) { consumo[insumoId] = (consumo[insumoId] || 0) + cant; };
-    (f.ingredientes || []).forEach(function (it) { var ins = idxIns[it.insumoId]; if (ins) sumar(ins.id, aUnidadInsumo(it.cantidad, it.unidad, ins) * factor); });
+    var pctDe = {};
+    (f.ingredientes || []).forEach(function (it) {
+      var ins = idxIns[it.insumoId];
+      if (!ins) return;
+      sumar(ins.id, aUnidadInsumo(it.cantidad, it.unidad, ins) * factor);
+      if (f.modo === 'pct' && it.unidad !== 'u') pctDe[ins.id] = (pctDe[ins.id] || 0) + num(it.pct);
+    });
     var litrosEnvasados = 0, sal = [];
     (salidas || []).forEach(function (s) {
       var cant = num(s.cantidad, 0);
@@ -1195,7 +1241,9 @@ var QG = (function () {
     var consumos = Object.keys(consumo).map(function (id) {
       var ins = idxIns[id];
       return { insumoId: id, nombre: ins.nombre, unidad: ins.unidad, cantidad: redondear(consumo[id] * 1000) / 1000,
-        costo: redondear(consumo[id] * costoUnitInsumo(ins, dolar)), stock: num(ins.stock) };
+        costo: redondear(consumo[id] * costoUnitInsumo(ins, dolar)), stock: num(ins.stock),
+        pct: pctDe[id] !== undefined ? Math.round(pctDe[id] * 10000) / 10000 : null,
+        gramos: ins.unidad === 'u' ? null : Math.round(consumo[id] * (ins.unidad === 'L' ? (num(ins.densidad) || 1) : 1) * 1000 * 10) / 10 };
     });
     var costoTotal = consumos.reduce(function (s, c) { return s + c.costo; }, 0) +
       (num(f.rinde) > 0 ? factor * (num((f.extras || {}).minutos) / 60 * num((f.extras || {}).valorHora) + num((f.extras || {}).otros)) : 0);
@@ -2006,6 +2054,7 @@ var QG = (function () {
     MODOS_STOCK: MODOS_STOCK, contenidoDe: contenidoDe, tanqueDeFormula: tanqueDeFormula, destinoStock: destinoStock,
     AROMAS: AROMAS, aromasDe: aromasDe, dibujosEtiqueta: dibujosEtiqueta, colorAroma: colorAroma, TEXTOS_PERFUMINA: TEXTOS_PERFUMINA,
     costoUnitInsumo: costoUnitInsumo, aUnidadInsumo: aUnidadInsumo, costoFormula: costoFormula, costoPresentacion: costoPresentacion,
+    resolverPorcentajes: resolverPorcentajes, aGramos: aGramos, gramosTanda: gramosTanda,
     precioSugerido: precioSugerido, precioItem: precioItem, resumenCaja: resumenCaja, pendienteCompra: pendienteCompra, litrosDeTexto: litrosDeTexto, planProduccion: planProduccion, recalcularCostos: recalcularCostos
   };
 })();
