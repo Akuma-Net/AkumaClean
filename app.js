@@ -75,6 +75,9 @@ var LOGO_URL = 'logo.png';
     pesos: '<path d="M12 3v18M16.5 7.5C16 6 14.4 5 12 5c-2.8 0-4.5 1.3-4.5 3.3 0 4.7 9 2.5 9 7.2 0 2-1.8 3.5-4.5 3.5-2.6 0-4.3-1.1-4.8-2.8"/>',
     copiar: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>',
     etiqueta: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+    mapa: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/>',
+    tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+    navegar: '<path d="M3 11 21 3l-8 18-2-8Z"/>',
     matraz: '<path d="M9 3h6M10 3v6.5L4.6 18.4A1.8 1.8 0 0 0 6.2 21h11.6a1.8 1.8 0 0 0 1.6-2.6L14 9.5V3"/><path d="M7.2 15h9.6"/>',
     caja: '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8V5h10v3M3 13h18M10 17h4"/>',
     carrito: '<path d="M3 4h2l2.4 11h11l2-8H6.2"/><circle cx="9.5" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/>',
@@ -193,6 +196,24 @@ var LOGO_URL = 'logo.png';
     return '549' + d;
   }
   function linkWa(tel, texto) { return 'https://wa.me/' + telWa(tel) + '?text=' + encodeURIComponent(texto); }
+  /* ---------- Cómo llegar: Google Maps, Waze y llamada ---------- */
+  function dirCliente(c) { return [c && c.direccion, c && c.localidad].filter(Boolean).join(', '); }
+  function dirMapa(c) { var d = dirCliente(c); return d ? d + ', Argentina' : ''; }
+  function linkMaps(dir) { return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(dir); }
+  function linkWaze(dir) { return 'https://waze.com/ul?navigate=yes&q=' + encodeURIComponent(dir); }
+  /** Recorrido con varias paradas, saliendo desde donde está el celular. */
+  function linkRuta(dirs) {
+    var dest = dirs[dirs.length - 1], paso = dirs.slice(0, -1);
+    return linkMaps(dest) + (paso.length ? '&waypoints=' + encodeURIComponent(paso.join('|')) : '');
+  }
+  function linkTel(t) { return 'tel:' + String(t || '').replace(/[^\d+]/g, ''); }
+  function botonesLlegar(c) {
+    if (!c) return '';
+    var d = dirMapa(c), b = '';
+    if (d) b += '<a class="btn chico" target="_blank" rel="noopener" href="' + esc(linkMaps(d)) + '">' + ic('mapa') + 'Maps</a><a class="btn chico" target="_blank" rel="noopener" href="' + esc(linkWaze(d)) + '">' + ic('navegar') + 'Waze</a>';
+    if (c.telefono) b += '<a class="btn chico" href="' + esc(linkTel(c.telefono)) + '">' + ic('tel') + 'Llamar</a>';
+    return b ? '<div class="fila llegar">' + b + '</div>' : '';
+  }
 
   /* ============================================================
    * 3. API (servidor real o modo demostración)
@@ -556,7 +577,7 @@ var LOGO_URL = 'logo.png';
       '<div class="seg" role="group" aria-label="Vista"><button type="button" data-act="vistaPed" data-id="tablero" aria-pressed="' + (S.vistaPedidos === 'tablero') + '">Tablero</button>' +
       '<button type="button" data-act="vistaPed" data-id="lista" aria-pressed="' + (S.vistaPedidos === 'lista') + '">Lista</button></div>' +
       (verPrecios() ? '<select class="in" id="f-pago" style="width:auto"><option value="">Todos los pagos</option><option value="debe"' + (S.busqueda.pago === 'debe' ? ' selected' : '') + '>Deben</option><option value="pagado"' + (S.busqueda.pago === 'pagado' ? ' selected' : '') + '>Pagados</option></select>' : '') +
-      '<button class="btn" type="button" data-act="hojaRuta" style="margin-left:auto">' + ic('camion') + 'Hoja de ruta</button></div>';
+      '<button class="btn" type="button" data-act="hojaRuta" style="margin-left:auto">' + ic('camion') + 'Recorrido</button></div>';
     return barra + (S.vistaPedidos === 'lista' ? listaPedidos() : tableroPedidos());
   };
   ALABRIR.pedidos = function (r) {
@@ -922,6 +943,7 @@ var LOGO_URL = 'logo.png';
         return '<div class="cli-sel"><div><b>' + esc(p.clienteNombre) + '</b><span class="muted" style="font-size:.85rem">' +
           esc([c.direccion, c.localidad].filter(Boolean).join(', ')) + (zona ? ' · ' + esc(zona.nombre) : '') + (c.telefono ? ' · ' + esc(c.telefono) : '') + '</span></div>' +
           (puede('clientes') ? '<button class="btn chico" type="button" data-act="verCliente" data-id="' + p.clienteId + '">Ver cuenta</button>' : '') + '</div>' +
+          (p.estado !== 'entregado' && p.estado !== 'anulado' ? botonesLlegar(c) : '') +
           '<div class="fila muted" style="font-size:.84rem">Creado ' + fechaHora(p.creado) + ' por ' + (p.origen === 'web' ? '<b style="color:var(--text)">la tienda online</b>' : esc((IDX.usr[p.creadoPor] || {}).nombre || '—')) +
           (p.fechaEntrega ? ' · Entrega: <b style="color:var(--text)">' + fechaCorta(p.fechaEntrega) + '</b>' : '') + ' · Lista ' + esc(p.tipoPrecio) + '</div>' +
           (p.notas ? '<div class="aviso">' + esc(p.notas) + '</div>' : '') + avisoEnvasar(p) +
@@ -1093,9 +1115,38 @@ var LOGO_URL = 'logo.png';
           (vp ? '<td class="der">' + pesos(QG.pendiente(p)) + '</td>' : '') + '<td style="width:110px"></td></tr>';
       }).join('') + '</tbody></table></div>';
     abrirModal({
-      tam: 'lg', titulo: 'Hoja de ruta', sinFoco: true,
-      cuerpo: function () { return '<div class="vista-previa">' + html + '</div>'; },
-      pie: function () { return '<button class="btn pri" type="button" data-imp>' + ic('imprimir') + 'Imprimir hoja de ruta</button>'; },
+      tam: 'lg', titulo: 'Recorrido de reparto', sinFoco: true, refrescable: true,
+      cuerpo: function () {
+        // se recalcula al refrescar: los entregados salen solos de la lista
+        var paradas = D.pedidos.filter(function (p) { return p.estado === 'listo' || p.estado === 'encamino'; })
+          .sort(function (a, b) { var za = (IDX.zona[a.zonaId] || {}).nombre || 'zzz', zb = (IDX.zona[b.zonaId] || {}).nombre || 'zzz'; return za < zb ? -1 : za > zb ? 1 : a.numero - b.numero; });
+        if (!paradas.length) return '<p class="vacio">¡Recorrido terminado! No quedan pedidos listos ni en camino. 🎉</p>';
+        var conDir = paradas.filter(function (p) { return dirMapa(IDX.cli[p.clienteId]); });
+        // Google Maps acepta pocas paradas por link desde el navegador del celular: se arma por tramos de 4
+        var tramos = [];
+        for (var i = 0; i < conDir.length; i += 4) tramos.push(conDir.slice(i, i + 4));
+        var cab = '<div class="recorrido-top">' + tramos.map(function (t, k) {
+          var desde = k * 4 + 1;
+          return '<a class="btn' + (k ? '' : ' pri') + '" target="_blank" rel="noopener" href="' + esc(linkRuta(t.map(function (p) { return dirMapa(IDX.cli[p.clienteId]); }))) + '">' + ic('mapa') +
+            (tramos.length > 1 ? 'Paradas ' + desde + ' a ' + (desde + t.length - 1) : 'Abrir recorrido completo en Maps') + '</a>';
+        }).join('') + '<span class="muted" style="font-size:.82rem">' + paradas.length + ' entrega' + (paradas.length > 1 ? 's' : '') + (vp ? ' · a cobrar ' + pesos(paradas.reduce(function (s, p) { return s + QG.pendiente(p); }, 0)) : '') + '</span></div>';
+        var n = 0;
+        return cab + '<ol class="paradas">' + paradas.map(function (p) {
+          var c = IDX.cli[p.clienteId] || {}, sig = ESTADO[p.estado].sig, dir = dirCliente(c);
+          var esConDir = !!dirMapa(c);
+          return '<li class="parada"><span class="nro-parada">' + (esConDir ? ++n : '–') + '</span><div class="parada-cuerpo">' +
+            '<div class="fila" style="justify-content:space-between"><b>' + esc(p.clienteNombre) + '</b><span class="muted mono" style="font-size:.78rem">' + nroPedido(p.numero) + ' · ' + chipEstado(p.estado) + '</span></div>' +
+            '<div class="parada-dir">' + (dir ? esc(dir) : '<i>Sin dirección cargada</i>') + '</div>' +
+            '<div class="muted" style="font-size:.8rem">' + (p.items || []).map(function (it) { return cant(it.cantidad) + ' × ' + esc(it.nombre) + ' ' + esc(it.presentacion); }).join(' · ') + '</div>' +
+            (vp && QG.pendiente(p) ? '<div class="parada-cobrar">Cobrar <b>' + pesos(QG.pendiente(p)) + '</b></div>' : '') +
+            '<div class="fila llegar">' + (esConDir ? '<a class="btn chico" target="_blank" rel="noopener" href="' + esc(linkMaps(dirMapa(c))) + '">' + ic('mapa') + 'Maps</a><a class="btn chico" target="_blank" rel="noopener" href="' + esc(linkWaze(dirMapa(c))) + '">' + ic('navegar') + 'Waze</a>' : '') +
+            (c.telefono ? '<a class="btn chico" href="' + esc(linkTel(c.telefono)) + '">' + ic('tel') + 'Llamar</a><a class="btn chico wa" target="_blank" rel="noopener" href="' + esc(linkWa(c.telefono, 'Hola ' + String(p.clienteNombre).split(' ')[0] + '! Soy de ' + (D.config.empresa || 'Akuma Clean') + ', estoy llegando con tu pedido ' + nroPedido(p.numero) + '.')) + '">' + ic('wa') + 'Estoy llegando</a>' : '') +
+            '<button class="btn chico" type="button" data-act="verPedido" data-id="' + p.id + '">Ver pedido</button>' +
+            (sig && puedeMover(p.estado, sig) ? '<button class="btn chico pri" type="button" data-act="avanzar" data-id="' + p.id + '">' + ESTADO[p.estado].btn + '</button>' : '') + '</div></div></li>';
+        }).join('') + '</ol>' +
+          '<details class="hoja-imprimir"><summary>Ver la hoja de ruta para imprimir</summary><div class="vista-previa">' + html + '</div></details>';
+      },
+      pie: function () { return '<button class="btn" type="button" data-imp>' + ic('imprimir') + 'Imprimir hoja de ruta</button>'; },
       alAbrir: function (r) { $('[data-imp]', r).onclick = function () { imprimir(html, 'a4'); }; }
     });
   }
@@ -1199,6 +1250,7 @@ var LOGO_URL = 'logo.png';
           '<div class="kpi"><small>En pedidos en curso</small><b>' + pesos(d.enCurso) + '</b><em>Todavía no entregado</em></div>' +
           '<div class="kpi"><small>Límite de crédito</small><b>' + (num(c.limiteCredito) ? pesos(c.limiteCredito) : 'Sin límite') + '</b><em>Lista ' + (c.tipoPrecio === 'minorista' ? 'minorista' : 'mayorista') + '</em></div></div>' +
           '<div class="muted" style="font-size:.86rem">' + esc([c.direccion, c.localidad].filter(Boolean).join(', ') || 'Sin dirección') + (zona ? ' · ' + esc(zona.nombre) + (num(c.distanciaKm) ? ' (' + cant(c.distanciaKm) + ' km)' : '') : '') + (c.telefono ? ' · Tel. ' + esc(c.telefono) : '') + (c.notas ? '<br>' + esc(c.notas) : '') + '</div>' +
+          botonesLlegar(c) +
           '<section><h3 style="font-size:.9rem;margin-bottom:6px">Pedidos</h3>' + (peds.length ? '<div class="tabla-wrap"><table class="t"><thead><tr><th>N°</th><th>Fecha</th><th>Estado</th><th class="der">Total</th><th class="der">Saldo</th></tr></thead><tbody>' +
             peds.map(function (p) {
               return '<tr class="clic" data-act="verPedido" data-id="' + p.id + '"><td class="mono">' + nroPedido(p.numero) + '</td><td class="num">' + fechaCorta(p.creado) + '</td><td>' + chipEstado(p.estado) + '</td><td class="der num">' + pesos(p.total) + '</td><td class="der num">' + (QG.pendiente(p) ? pesos(QG.pendiente(p)) : '—') + '</td></tr>';
@@ -1831,7 +1883,7 @@ var LOGO_URL = 'logo.png';
       var a = vc ? analisisFormula(f) : null;
       var estado = !vc ? '' : a.c.faltaDolar ? '<span class="chip pg-parcial">Falta cotización</span>' : a.bajos.length ? '<span class="chip pg-pendiente">' + a.bajos.length + ' precio' + (a.bajos.length > 1 ? 's' : '') + ' bajo margen</span>' : a.pres.length ? '<span class="chip pg-pagado">Precios OK</span>' : '<span class="chip plano">Sin presentaciones</span>';
       var html = '<article class="fcard' + (f.activo !== 'si' ? ' inactiva' : '') + '"><header class="fcard-head"><span class="fcard-ic">' + ic('matraz') + '</span>' +
-        '<div class="fcard-tit"><h3>' + esc(f.nombre) + '</h3><span class="muted">Rinde ' + cant(f.rinde) + ' L · ' + (f.ingredientes || []).length + ' ingredientes</span></div>' + estado + '</header>';
+        '<div class="fcard-tit"><h3>' + esc(f.nombre) + '</h3><span class="muted">Rinde ' + cant(f.rinde) + ' L · ' + (f.ingredientes || []).length + ' ingredientes' + (f.modo === 'pct' ? ' · en %' : '') + '</span></div>' + estado + '</header>';
       if (vc) {
         html += '<div class="ftiles"><div><small>Costo de la tanda</small><b>' + pesos(Math.round(a.c.tanda)) + '</b></div><div><small>Costo por litro</small><b>' + pesos(a.c.porLitro) + '</b>' + (dolar() ? '<em>' + usd(a.c.porLitro) + '</em>' : '') + '</div>' +
           '<div><small>Ganancia objetivo</small><b>' + cant(f.margenMay) + ' / ' + cant(f.margenMin) + ' %</b><em>mayorista / minorista</em></div></div>';
@@ -1844,7 +1896,7 @@ var LOGO_URL = 'logo.png';
             celda(x.may, x.gMay, f.margenMay, x.sugMay) + celda(x.min, x.gMin, f.margenMin, x.sugMin) + '</div>';
         }).join('') + '</div>' : '<p class="muted" style="margin:0;font-size:.85rem">Conectala con los productos que vendés (bidón, botella, suelto) para calcular su costo.</p>';
       } else {
-        html += '<ul class="freceta">' + (f.ingredientes || []).map(function (it) { var ins = insumoPorId(it.insumoId); return '<li><span>' + esc(ins ? ins.nombre : '—') + '</span><b>' + cant(it.cantidad) + ' ' + it.unidad + '</b></li>'; }).join('') + '</ul>';
+        html += '<ul class="freceta">' + (f.ingredientes || []).map(function (it) { var ins = insumoPorId(it.insumoId); return '<li><span>' + esc(ins ? ins.nombre : '—') + '</span><b>' + (f.modo === 'pct' && it.unidad !== 'u' ? cant(it.pct) + ' % · ' + cant(it.cantidad) + ' g' : cant(it.cantidad) + ' ' + it.unidad) + '</b></li>'; }).join('') + '</ul>';
       }
       html += '<footer class="fila">' + (adm && a && a.bajos.length ? '<button class="btn chico" type="button" data-act="aplicarPrecios" data-id="' + f.id + '">Aplicar precios sugeridos</button>' : '') +
         '<span class="fila" style="margin-left:auto">' + (adm ? '<button class="btn chico" type="button" data-act="editarFormula" data-id="' + f.id + '">' + ic('editar') + 'Editar</button>' : '<button class="btn chico" type="button" data-act="verReceta" data-id="' + f.id + '">Ver receta</button>') +
@@ -2042,8 +2094,30 @@ var LOGO_URL = 'logo.png';
   /* ----- Editor de fórmula (receta + presentaciones + precios) ----- */
   ACT.editarFormula = function (id) {
     var f0 = id ? formulaPorId(id) : null;
-    var F = f0 ? JSON.parse(JSON.stringify(f0)) : { nombre: '', rinde: 50, ingredientes: [], extras: { minutos: 0, valorHora: 0, otros: 0 }, presentaciones: [], margenMay: 40, margenMin: 70, actualizarCosto: 'si', notas: '', activo: 'si' };
+    var F = f0 ? JSON.parse(JSON.stringify(f0)) : { nombre: '', rinde: 50, modo: 'pct', densidad: 1, ingredientes: [], extras: { minutos: 0, valorHora: 0, otros: 0 }, presentaciones: [], margenMay: 40, margenMin: 70, actualizarCosto: 'si', notas: '', activo: 'si' };
     F.extras = F.extras || { minutos: 0, valorHora: 0, otros: 0 };
+    F.modo = F.modo === 'pct' ? 'pct' : 'cant';
+    F.densidad = num(F.densidad) || 1;
+    var enPct = function () { return F.modo === 'pct'; };
+    /** Pasa la fórmula de gramos a % (o al revés, dejando los gramos calculados). */
+    var cambiarModo = function (modo) {
+      if (modo === F.modo) return;
+      if (modo === 'pct') {
+        var total = QG.gramosTanda(F);
+        F.ingredientes.forEach(function (it) {
+          if (it.unidad === 'u') return;
+          var g = QG.aGramos(it.cantidad, it.unidad, insumoPorId(it.insumoId));
+          it.pct = total ? Math.round(g / total * 100 * 10000) / 10000 : 0;
+          it.resto = false;
+        });
+      }
+      F.modo = modo;
+      QG.resolverPorcentajes(F);
+    };
+    var gramos = function (g) {
+      g = Math.round(num(g) * 10) / 10;
+      return '<b class="num">' + cant(g) + ' g</b>' + (g >= 1000 ? '<br><small class="muted">' + cant(Math.round(g / 10) / 100) + ' kg</small>' : '');
+    };
     var unidadesPara = function (ins) { return ins.unidad === 'u' ? ['u'] : ins.unidad === 'kg' ? ['g', 'kg', 'ml', 'L'] : ['ml', 'L', 'g', 'kg']; };
     abrirModal({
       tam: 'lg', titulo: id ? 'Fórmula · ' + esc(F.nombre) : 'Nueva fórmula',
@@ -2051,9 +2125,13 @@ var LOGO_URL = 'logo.png';
         return '<div class="pe"><div class="pe-lado">' +
           '<div class="grid3"><label class="campo" style="grid-column:span 2"><span>Nombre del producto</span><input class="in" id="fo-nombre" value="' + esc(F.nombre) + '" placeholder="Suavizante Celeste" autofocus></label>' +
           '<label class="campo"><span>La tanda rinde (litros)</span><input class="in num" id="fo-rinde" inputmode="decimal" value="' + (F.rinde || '') + '"></label></div>' +
+          '<div class="fila modo-form"><div class="campo"><span>Cargar los ingredientes en</span><div class="seg" role="group" aria-label="Cómo se cargan los ingredientes">' +
+          '<button type="button" data-modo-f="pct" aria-pressed="' + enPct() + '">Porcentaje %</button><button type="button" data-modo-f="cant" aria-pressed="' + !enPct() + '">Gramos / kilos</button></div></div>' +
+          '<label class="campo" id="fo-dens-box" style="width:150px"' + (enPct() ? '' : ' hidden') + '><span title="Kilos que pesa 1 litro del producto terminado">Densidad (kg por litro)</span><input class="in num" id="fo-dens" inputmode="decimal" value="' + cant(F.densidad) + '"></label>' +
+          '<p class="muted" id="fo-modo-ayuda" style="margin:0;font-size:.8rem;flex:1;min-width:200px"></p></div>' +
           '<div class="dropdown"><label class="campo"><span>Agregar ingrediente</span><label class="buscar" style="max-width:none">' + ic('buscar') +
           '<input class="in" id="fo-buscar" type="search" placeholder="Buscá un insumo: pasta, esencia, agua…" autocomplete="off"></label></label><div class="resultados" id="fo-res" hidden></div></div>' +
-          '<div class="tabla-wrap"><table class="t items"><thead><tr><th>Ingrediente</th><th class="der">Cantidad</th><th>Unidad</th><th class="der">Costo</th><th></th></tr></thead><tbody id="fo-ing"></tbody></table></div>' +
+          '<div class="tabla-wrap"><table class="t items"><thead id="fo-head"></thead><tbody id="fo-ing"></tbody><tfoot id="fo-pie"></tfoot></table></div>' +
           '<div class="grid3"><label class="campo"><span>Mano de obra (minutos por tanda)</span><input class="in num" id="fo-min" inputmode="decimal" value="' + (num(F.extras.minutos) || '') + '" placeholder="0"></label>' +
           '<label class="campo"><span>Valor de la hora $</span><input class="in num" id="fo-vh" inputmode="decimal" value="' + (num(F.extras.valorHora) || '') + '" placeholder="0"></label>' +
           '<label class="campo"><span>Otros gastos por tanda $</span><input class="in num" id="fo-otros" inputmode="decimal" value="' + (num(F.extras.otros) || '') + '" placeholder="Luz, gas…"></label></div>' +
@@ -2079,6 +2157,13 @@ var LOGO_URL = 'logo.png';
           F.margenMay = num($('#fo-mmay', r).value); F.margenMin = num($('#fo-mmin', r).value); F.notas = $('#fo-notas', r).value;
         };
         var pintarIng = function () {
+          QG.resolverPorcentajes(F);
+          $('#fo-dens-box', r).hidden = !enPct();
+          $('#fo-modo-ayuda', r).innerHTML = enPct() ? 'Cada ingrediente es un % del total (18 g en 1 kg = 1,8 %). Al costado ves los gramos para la tanda de <b>' + cant(F.rinde) + ' L</b>' + (F.densidad !== 1 ? ' (' + cant(QG.gramosTanda(F) / 1000) + ' kg)' : '') + '. Tocá <b>Completa al 100 %</b> en el agua para que se calcule sola.' : 'Cada ingrediente con su cantidad para una tanda.';
+          $$('[data-modo-f]', r).forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-modo-f') === F.modo)); });
+          if (enPct()) return pintarIngPct();
+          $('#fo-head', r).innerHTML = '<tr><th>Ingrediente</th><th class="der">Cantidad</th><th>Unidad</th><th class="der">Costo</th><th></th></tr>';
+          $('#fo-pie', r).innerHTML = '';
           var c = QG.costoFormula(F, D.insumos, dolar());
           $('#fo-ing', r).innerHTML = F.ingredientes.length ? F.ingredientes.map(function (it, n) {
             var ins = insumoPorId(it.insumoId);
@@ -2091,6 +2176,44 @@ var LOGO_URL = 'logo.png';
               '<td class="der num" data-costo="' + n + '">' + pesos(costo) + '<br><small class="muted">' + Math.round(pct) + ' %</small></td>' +
               '<td class="acc"><button class="btn icono chico peligro" type="button" data-quitar-i="' + n + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>';
           }).join('') : '<tr><td colspan="5" class="vacio">Buscá los insumos arriba y poné la cantidad para una tanda.</td></tr>';
+        };
+        var celdaCosto = function (c, n) {
+          var cc = c.detalle[n] ? c.detalle[n].costo : 0, pc = c.tanda ? cc / c.tanda * 100 : 0;
+          return pesos(cc) + '<br><small class="muted">' + Math.round(pc) + ' % del costo</small>';
+        };
+        var pieTotal = function () {
+          var res = QG.resolverPorcentajes(F), ok = Math.abs(res.total - 100) <= 0.05;
+          return '<tr class="fo-total' + (ok ? ' ok' : ' mal') + '"><td><b>Total</b>' + (ok ? '' : '<br><small>' + (res.total > 100 ? 'Se pasa ' + cant(Math.round((res.total - 100) * 1000) / 1000) + ' %' : 'Faltan ' + cant(Math.round((100 - res.total) * 1000) / 1000) + ' % · marcá el agua como Completa') + '</small>') + '</td>' +
+            '<td class="der num"><b>' + cant(res.total) + ' %</b></td><td class="der">' + gramos(QG.gramosTanda(F) * Math.min(res.total, 100) / 100) + '</td>' + (verCostos() ? '<td></td>' : '') + '<td></td></tr>';
+        };
+        var pintarIngPct = function () {
+          var c = QG.costoFormula(F, D.insumos, dolar());
+          $('#fo-head', r).innerHTML = '<tr><th>Ingrediente</th><th class="der" style="width:110px">%</th><th class="der">Gramos en la tanda</th>' + (verCostos() ? '<th class="der">Costo</th>' : '') + '<th></th></tr>';
+          $('#fo-ing', r).innerHTML = F.ingredientes.length ? F.ingredientes.map(function (it, n) {
+            var ins = insumoPorId(it.insumoId);
+            if (!ins) return '';
+            var porU = it.unidad === 'u';
+            return '<tr' + (it.resto ? ' class="fo-resto"' : '') + '><td><b style="font-weight:500">' + esc(ins.nombre) + '</b>' + (ins.moneda === 'USD' ? ' <span class="chip plano pg-parcial">US$</span>' : '') +
+              (porU ? '' : '<br><button type="button" class="completa' + (it.resto ? ' si' : '') + '" data-resto="' + n + '" title="Este ingrediente completa lo que falta para llegar al 100 %">' + (it.resto ? '✓ Completa al 100 %' : 'Completa al 100 %') + '</button>') + '</td>' +
+              (porU ? '<td class="cant"><input class="in num" data-i="' + n + '" data-k="cantidad" inputmode="decimal" value="' + it.cantidad + '" aria-label="Unidades"></td><td class="der muted">unidades</td>' :
+                it.resto ? '<td class="der num" data-pct="' + n + '"><b>' + cant(it.pct) + ' %</b></td><td class="der" data-g="' + n + '">' + gramos(it.cantidad) + '</td>' :
+                '<td class="cant"><span class="pct-in"><input class="in num" data-i="' + n + '" data-k="pct" inputmode="decimal" value="' + (num(it.pct) ? String(it.pct).replace('.', ',') : '') + '" placeholder="0" aria-label="Porcentaje"><i>%</i></span></td><td class="der" data-g="' + n + '">' + gramos(it.cantidad) + '</td>') +
+              (verCostos() ? '<td class="der num" data-costo="' + n + '">' + celdaCosto(c, n) + '</td>' : '') +
+              '<td class="acc"><button class="btn icono chico peligro" type="button" data-quitar-i="' + n + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>';
+          }).join('') : '<tr><td colspan="6" class="vacio">Buscá los insumos arriba y poné el % de cada uno. Ejemplo: 18 g por kilo = 1,8 %.</td></tr>';
+          $('#fo-pie', r).innerHTML = F.ingredientes.length ? pieTotal() : '';
+        };
+        /** Al escribir un %: actualiza gramos, agua, costos y total sin redibujar (no se pierde el cursor). */
+        var refrescarPct = function () {
+          QG.resolverPorcentajes(F);
+          var c = QG.costoFormula(F, D.insumos, dolar());
+          F.ingredientes.forEach(function (it, n) {
+            var g = $('[data-g="' + n + '"]', r); if (g) g.innerHTML = gramos(it.cantidad);
+            var p = $('[data-pct="' + n + '"]', r); if (p) p.innerHTML = '<b>' + cant(it.pct) + ' %</b>';
+            var k = $('[data-costo="' + n + '"]', r); if (k) k.innerHTML = celdaCosto(c, n);
+          });
+          $('#fo-pie', r).innerHTML = pieTotal();
+          pintarResumen();
         };
         var pintarResumen = function () {
           var c = QG.costoFormula(F, D.insumos, dolar());
@@ -2144,10 +2267,16 @@ var LOGO_URL = 'logo.png';
           var b = e.target.closest('[data-ins]');
           if (!b) return;
           var ins = insumoPorId(b.getAttribute('data-ins'));
-          F.ingredientes.push({ insumoId: ins.id, cantidad: 0, unidad: ins.unidad === 'u' ? 'u' : ins.unidad });
+          var nuevo = { insumoId: ins.id, cantidad: 0, unidad: ins.unidad === 'u' ? 'u' : ins.unidad };
+          if (enPct() && ins.unidad !== 'u') {
+            nuevo.pct = 0; nuevo.unidad = 'g';
+            // el agua completa sola al 100 % si todavía no hay otro ingrediente que lo haga
+            nuevo.resto = /agua/i.test(ins.nombre) && !F.ingredientes.some(function (x) { return x.resto; });
+          }
+          F.ingredientes.push(nuevo);
           inp.value = ''; res.hidden = true;
           todo();
-          var q = $('[data-i="' + (F.ingredientes.length - 1) + '"][data-k="cantidad"]', r);
+          var q = $('[data-i="' + (F.ingredientes.length - 1) + '"][data-k="' + (enPct() && ins.unidad !== 'u' ? 'pct' : 'cantidad') + '"]', r);
           if (q) { q.focus(); q.select(); }
         });
         // buscador de productos para conectar
@@ -2186,6 +2315,15 @@ var LOGO_URL = 'logo.png';
         });
         r.addEventListener('click', function (e) {
           if (!e.target.closest('.dropdown')) { res.hidden = true; rp.hidden = true; }
+          var mf = e.target.closest('[data-modo-f]');
+          if (mf) { leerExtras(); cambiarModo(mf.getAttribute('data-modo-f')); todo(); return; }
+          var rs = e.target.closest('[data-resto]');
+          if (rs) {
+            var k0 = Number(rs.getAttribute('data-resto')), era = F.ingredientes[k0].resto;
+            F.ingredientes.forEach(function (it) { it.resto = false; });
+            F.ingredientes[k0].resto = !era;
+            todo(); return;
+          }
           var qi = e.target.closest('[data-quitar-i]');
           if (qi) { F.ingredientes.splice(Number(qi.getAttribute('data-quitar-i')), 1); todo(); return; }
           var qp = e.target.closest('[data-quitar-p]');
@@ -2200,6 +2338,12 @@ var LOGO_URL = 'logo.png';
         });
         r.addEventListener('input', function (e) {
           var el = e.target;
+          if (el.getAttribute('data-k') === 'pct') { F.ingredientes[el.getAttribute('data-i')].pct = Math.max(0, num(leerNumero(el.value))); refrescarPct(); return; }
+          if (el.id === 'fo-dens' || (el.id === 'fo-rinde' && enPct())) {
+            leerExtras(); F.densidad = num(leerNumero($('#fo-dens', r).value)) || 1;
+            refrescarPct(); $('#fo-modo-ayuda', r).innerHTML = $('#fo-modo-ayuda', r).innerHTML.replace(/<b>[^<]* L<\/b>/, '<b>' + cant(F.rinde) + ' L</b>');
+            return;
+          }
           if (el.getAttribute('data-i') !== null && el.getAttribute('data-k') === 'cantidad') {
             F.ingredientes[el.getAttribute('data-i')].cantidad = num(el.value);
             var c = QG.costoFormula(F, D.insumos, dolar());
@@ -2223,6 +2367,7 @@ var LOGO_URL = 'logo.png';
         };
         var guardar = function (btn, aplicar) {
           leerExtras();
+          if (enPct()) { F.densidad = num(leerNumero($('#fo-dens', r).value)) || 1; QG.resolverPorcentajes(F); }
           F.actualizarCosto = $('#fo-auto', r).checked ? 'si' : 'no';
           if (id) F.activo = $('#fo-activo', r).checked ? 'si' : 'no';
           accion(btn, 'guardarFormula', F).then(function (res) {
@@ -2255,8 +2400,29 @@ var LOGO_URL = 'logo.png';
             '<label class="campo"><span>Lote</span><input class="in mono" id="pr-lote" placeholder="Automático"></label>' +
             '<label class="campo"><span>Notas</span><input class="in" id="pr-notas" placeholder="Opcional"></label></div>');
       },
-      pie: function () { return soloReceta ? '<button class="btn" type="button" data-cerrar2>Cerrar</button>' : '<button class="btn" type="button" data-cerrar2>Cancelar</button><button class="btn ok" type="button" id="pr-ok">' + ic('matraz') + 'Registrar producción</button>'; },
+      pie: function () {
+        return '<button class="btn" type="button" id="pr-imp" style="margin-right:auto">' + ic('imprimir') + 'Imprimir planilla</button>' +
+          (soloReceta ? '<button class="btn" type="button" data-cerrar2>Cerrar</button>' : '<button class="btn" type="button" data-cerrar2>Cancelar</button><button class="btn ok" type="button" id="pr-ok">' + ic('matraz') + 'Registrar producción</button>');
+      },
       alAbrir: function (r, m) {
+        var ultimoPlan = null;
+        /* Planilla de fabricación para el depósito: % y gramos a pesar, con casillero para tildar. */
+        $('#pr-imp', r).onclick = function () {
+          var plan = ultimoPlan, pct = f.modo === 'pct';
+          if (!plan) return;
+          var lote = $('#pr-lote', r) ? $('#pr-lote', r).value.trim() : '';
+          var ing = plan.consumos.filter(function (c) { var i = insumoPorId(c.insumoId); return i && i.tipo === 'materia'; });
+          var html = '<div class="doc"><div class="enc"><div><h1>Orden de fabricación</h1>' + esc(D.config.empresa || '') + '</div><div style="text-align:right"><b>' + esc(f.nombre) + '</b><br>' + cant(litros) + ' L' +
+            (pct && num(f.densidad) && num(f.densidad) !== 1 ? ' · ' + cant(litros * num(f.densidad)) + ' kg' : '') + '<br>Fecha: ' + fechaCorta(($('#pr-fecha', r) || {}).value || D.hoy) + (lote ? '<br>Lote: ' + esc(lote) : '<br>Lote: __________') + '</div></div>' +
+            '<table style="margin-top:12px"><thead><tr><th style="width:28px">#</th><th>Ingrediente</th>' + (pct ? '<th class="der">%</th><th class="der">Pesar (g)</th>' : '<th class="der">Cantidad</th>') + '<th style="width:70px">Listo ✓</th></tr></thead><tbody>' +
+            ing.map(function (c, k) {
+              return '<tr><td>' + (k + 1) + '</td><td>' + esc(c.nombre) + '</td>' + (pct ? '<td class="der">' + (c.pct !== null ? cant(c.pct) + ' %' : '') + '</td><td class="der"><b>' + (c.pct !== null ? cant(Math.round(c.gramos * 10) / 10) : cantInsumo(c.cantidad, c.unidad)) + '</b></td>' : '<td class="der"><b>' + cantInsumo(c.cantidad, c.unidad) + '</b></td>') + '<td></td></tr>';
+            }).join('') +
+            (pct ? '<tr><td></td><td><b>Total</b></td><td class="der"><b>' + cant(Math.round(ing.reduce(function (s0, c) { return s0 + (c.pct || 0); }, 0) * 1000) / 1000) + ' %</b></td><td class="der"><b>' + cant(Math.round(ing.reduce(function (s0, c) { return s0 + (c.pct !== null ? c.gramos : 0); }, 0))) + '</b></td><td></td></tr>' : '') +
+            '</tbody></table>' + (f.notas ? '<p style="margin-top:12px"><b>Procedimiento:</b> ' + esc(f.notas) + '</p>' : '') +
+            '<p style="margin-top:28px">Preparó: ______________________ &nbsp;&nbsp; Controló: ______________________</p></div>';
+          imprimir(html, 'a4');
+        };
         var pintar = function () {
           var plan = QG.planProduccion(f, litros, Object.keys(salidas).map(function (k) { return { productoId: k, cantidad: salidas[k] }; }), D.insumos, D.productos, dolar());
           $('#pr-mult', r).innerHTML = '<span class="muted" style="font-size:.84rem">Tandas:</span>' + [0.5, 1, 2, 3, 4].map(function (k) {
@@ -2264,14 +2430,19 @@ var LOGO_URL = 'logo.png';
           }).join('');
           var ingredientes = plan.consumos.filter(function (c) { var i = insumoPorId(c.insumoId); return i && i.tipo === 'materia'; });
           var envases = plan.consumos.filter(function (c) { var i = insumoPorId(c.insumoId); return i && i.tipo !== 'materia'; });
+          var pct = f.modo === 'pct';
           var fila = function (c) {
             var falta = c.cantidad > c.stock + 1e-9;
-            return '<tr><td>' + esc(c.nombre) + '</td><td class="der num"><b>' + cantInsumo(c.cantidad, c.unidad) + '</b></td><td class="der num muted">' + cantInsumo(c.stock, c.unidad) + '</td>' +
+            return '<tr><td>' + esc(c.nombre) + '</td>' +
+              (pct ? '<td class="der num">' + (c.pct !== null && c.pct !== undefined ? cant(c.pct) + ' %' : '') + '</td><td class="der num"><b>' + (c.gramos !== null && c.gramos !== undefined && c.pct !== null ? cant(Math.round(c.gramos * 10) / 10) + ' g' : cantInsumo(c.cantidad, c.unidad)) + '</b></td>' :
+                '<td class="der num"><b>' + cantInsumo(c.cantidad, c.unidad) + '</b></td>') +
+              '<td class="der num muted">' + cantInsumo(c.stock, c.unidad) + '</td>' +
               '<td>' + (falta ? '<span class="chip pg-pendiente">Falta ' + cantInsumo(c.cantidad - c.stock, c.unidad) + '</span>' : '<span class="chip pg-pagado">OK</span>') + '</td>' +
               (verCostos() && !soloReceta ? '<td class="der num">' + pesos(c.costo) + '</td>' : '') + '</tr>';
           };
-          $('#pr-receta', r).innerHTML = '<h3 class="sub">Ingredientes para ' + cant(litros) + ' L</h3><div class="tabla-wrap"><table class="t"><thead><tr><th>Insumo</th><th class="der">Usar</th><th class="der">Hay</th><th></th>' + (verCostos() && !soloReceta ? '<th class="der">Costo</th>' : '') + '</tr></thead><tbody>' +
-            ingredientes.map(fila).join('') + (envases.length ? '<tr><td colspan="5" class="muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;background:var(--surface-2)">Envases</td></tr>' + envases.map(fila).join('') : '') + '</tbody></table></div>' +
+          ultimoPlan = plan;
+          $('#pr-receta', r).innerHTML = '<h3 class="sub">Ingredientes para ' + cant(litros) + ' L</h3><div class="tabla-wrap"><table class="t"><thead><tr><th>Insumo</th>' + (pct ? '<th class="der">%</th><th class="der">Pesar</th>' : '<th class="der">Usar</th>') + '<th class="der">Hay</th><th></th>' + (verCostos() && !soloReceta ? '<th class="der">Costo</th>' : '') + '</tr></thead><tbody>' +
+            ingredientes.map(fila).join('') + (envases.length ? '<tr><td colspan="6" class="muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;background:var(--surface-2)">Envases</td></tr>' + envases.map(fila).join('') : '') + '</tbody></table></div>' +
             (f.notas ? '<div class="aviso azul" style="margin-top:10px"><b>Procedimiento:</b> ' + esc(f.notas) + '</div>' : '');
           if (soloReceta) return;
           var tanque = QG.tanqueDeFormula(f, D.productos);
