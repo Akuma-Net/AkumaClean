@@ -1073,6 +1073,155 @@ var LOGO_URL = 'logo.png';
     st.textContent = formato === 'ticket' ? '@page { size: 80mm auto; margin: 3mm; }' : formato === 'etiquetas' ? '@page { size: A4; margin: 5mm; }' : '@page { size: A4; margin: 14mm; }';
     window.print();
   }
+  /* ============================================================
+   * RESUMEN DE CUENTA: varios pedidos de un cliente en un solo comprobante
+   * (los pedidos siguen separados; el comprobante los junta).
+   * ============================================================ */
+  function nroResumen(n) { return n ? String(n).padStart(4, '0') : '----'; }
+  /** Productos sumados: el mismo producto al mismo precio en varios pedidos va en una sola línea. */
+  function sumarItems(pedidos) {
+    var filas = {}, orden = [];
+    pedidos.forEach(function (p) {
+      (p.items || []).forEach(function (i) {
+        var k = i.productoId + '|' + num(i.precio);
+        if (!filas[k]) { filas[k] = { nombre: i.nombre, presentacion: i.presentacion, precio: num(i.precio), cantidad: 0 }; orden.push(k); }
+        filas[k].cantidad += num(i.cantidad);
+      });
+    });
+    return orden.map(function (k) { return filas[k]; }).sort(function (a, b) { return (a.nombre + a.presentacion).localeCompare(b.nombre + b.presentacion); });
+  }
+  function totalesResumen(pedidos) {
+    var t = { subtotal: 0, descuento: 0, envio: 0, total: 0, pagado: 0, saldo: 0 };
+    pedidos.forEach(function (p) {
+      t.subtotal += num(p.subtotal); t.descuento += num(p.descuento); t.envio += num(p.envio);
+      t.total += num(p.total); t.pagado += Math.min(num(p.pagado), num(p.total)); t.saldo += QG.pendiente(p);
+    });
+    return t;
+  }
+  function htmlResumen(c, pedidos, modo, numero) {
+    var cfg = D.config, t = totalesResumen(pedidos);
+    var fila = function (i) { return '<tr><td>' + cant(i.cantidad) + '</td><td>' + esc(i.nombre) + '</td><td>' + esc(i.presentacion) + '</td><td class="der">' + pesos(i.precio) + '</td><td class="der">' + pesos(num(i.cantidad) * num(i.precio)) + '</td></tr>'; };
+    var cuerpo;
+    if (modo === 'productos') {
+      cuerpo = sumarItems(pedidos).map(fila).join('');
+    } else {
+      cuerpo = pedidos.map(function (p) {
+        return '<tr class="sub-ped"><td colspan="5"><b>Pedido ' + nroPedido(p.numero) + '</b> · ' + fechaCorta(p.fechaEntrega || p.creado) + ' · ' + esc(ESTADO[p.estado].t) + '</td></tr>' +
+          (p.items || []).map(fila).join('') +
+          (num(p.descuento) ? '<tr class="extra"><td></td><td colspan="3">Descuento ' + cant(p.descuentoPct) + ' %</td><td class="der">-' + pesos(p.descuento) + '</td></tr>' : '') +
+          (num(p.envio) ? '<tr class="extra"><td></td><td colspan="3">Envío</td><td class="der">' + pesos(p.envio) + '</td></tr>' : '') +
+          '<tr class="tot-ped"><td colspan="4">Total pedido ' + nroPedido(p.numero) + (num(p.pagado) ? ' · pagado ' + pesos(Math.min(num(p.pagado), num(p.total))) : '') + '</td><td class="der">' + pesos(p.total) + '</td></tr>';
+      }).join('');
+    }
+    return '<div class="doc">' +
+      '<div class="enc"><div class="enc-marca"><img class="doc-logo" src="' + LOGO_URL + '" alt=""><div><h1>' + esc(cfg.empresa || '') + '</h1>' + esc(cfg.direccion || '') + '<br>' + (cfg.telefono ? 'Tel. ' + esc(cfg.telefono) : '') + (cfg.cuit ? ' · CUIT ' + esc(cfg.cuit) : '') + '</div></div>' +
+      '<div style="text-align:right"><b style="font-size:15px">RESUMEN DE CUENTA</b><br>N° ' + nroResumen(numero) + '<br>Fecha: ' + fechaCorta(D.hoy) + '<br>' + pedidos.length + ' pedido' + (pedidos.length > 1 ? 's' : '') + '</div></div>' +
+      '<div class="bloque"><div><b>Cliente:</b> ' + esc(c.nombre) + '<br><b>Dirección:</b> ' + esc([c.direccion, c.localidad].filter(Boolean).join(', ')) + '</div>' +
+      '<div><b>Tel.:</b> ' + esc(c.telefono || '') + '<br><b>Pedidos:</b> ' + pedidos.map(function (p) { return nroPedido(p.numero); }).join(', ') + '</div></div>' +
+      '<table style="margin-top:10px"><thead><tr><th>Cant.</th><th>Producto</th><th>Presentación</th><th class="der">Precio unit.</th><th class="der">Importe</th></tr></thead><tbody>' + cuerpo + '</tbody></table>' +
+      '<div class="totales">' + (modo === 'productos' ? '<div><span>Subtotal productos</span><span>' + pesos(t.subtotal) + '</span></div>' +
+        (t.descuento ? '<div><span>Descuentos</span><span>-' + pesos(t.descuento) + '</span></div>' : '') + (t.envio ? '<div><span>Envíos</span><span>' + pesos(t.envio) + '</span></div>' : '') : '') +
+      '<div class="g"><span>' + (t.pagado || !t.saldo ? 'TOTAL' : 'TOTAL A PAGAR') + '</span><span>' + pesos(t.total) + '</span></div>' +
+      (t.pagado ? '<div><span>Pagado a cuenta</span><span>-' + pesos(t.pagado) + '</span></div><div class="g"><span>SALDO A PAGAR</span><span>' + pesos(t.saldo) + '</span></div>' : '') +
+      (mostrarUsd() && dolar() ? '<div><span>Equivale (dólar oficial ' + pesos(dolar()) + ')</span><span>' + usd(t.saldo || t.total) + '</span></div>' : '') + '</div>' +
+      (cfg.alias || cfg.cbu ? '<p><b>Para transferir:</b> ' + (cfg.alias ? 'Alias ' + esc(cfg.alias) : '') + (cfg.cbu ? (cfg.alias ? ' · ' : '') + 'CBU ' + esc(cfg.cbu) : '') + '</p>' : '') +
+      '<div class="firmas"><div>Firma y aclaración del cliente</div><div>Fecha</div></div>' +
+      '<p class="pie">Resumen de los pedidos indicados. ' + esc(cfg.pieRemito || 'Documento no válido como factura.') + '</p></div>';
+  }
+  function textoResumen(c, pedidos, numero) {
+    var t = totalesResumen(pedidos), cfg = D.config;
+    return 'Hola ' + String(c.nombre).split(' ')[0] + '! Te paso el resumen de tus pedidos' + (numero ? ' (Resumen N° ' + nroResumen(numero) + ')' : '') + ':\n\n' +
+      pedidos.map(function (p) { return '• Pedido ' + nroPedido(p.numero) + ' del ' + fechaCorta(p.fechaEntrega || p.creado) + ': ' + pesos(p.total) + (QG.pendiente(p) < num(p.total) ? ' (debe ' + pesos(QG.pendiente(p)) + ')' : ''); }).join('\n') +
+      '\n\n' + (t.pagado ? 'Total: ' + pesos(t.total) + '\nPagado a cuenta: ' + pesos(t.pagado) + '\n*Saldo a pagar: ' + pesos(t.saldo) + '*' : '*Total a pagar: ' + pesos(t.total) + '*') +
+      (cfg.alias ? '\n\nPara transferir: alias ' + cfg.alias : '') + '\n\n' + (cfg.empresa || 'Akuma Clean');
+  }
+  function modalResumen(clienteId) {
+    var c = IDX.cli[clienteId];
+    if (!c) return;
+    var todos = D.pedidos.filter(function (p) { return p.clienteId === clienteId && p.estado !== 'anulado'; }).sort(function (a, b) { return a.creado < b.creado ? -1 : 1; });
+    if (!todos.length) return toast('Este cliente no tiene pedidos.', true);
+    var sel = {};
+    // arranca con lo entregado que se debe; si no hay, con todo lo que se debe; si no, con los últimos
+    todos.forEach(function (p) { if (QG.pendiente(p) > 0 && p.estado === 'entregado') sel[p.id] = true; });
+    if (!Object.keys(sel).length) todos.forEach(function (p) { if (QG.pendiente(p) > 0) sel[p.id] = true; });
+    if (!Object.keys(sel).length) todos.slice(-5).forEach(function (p) { sel[p.id] = true; });
+    var modo = leerLocal('ac_resumen_modo') === 'productos' ? 'productos' : 'pedido', numero = 0;
+    var elegidos = function () { return todos.filter(function (p) { return sel[p.id]; }); };
+    abrirModal({
+      tam: 'lg', titulo: 'Resumen de cuenta · ' + esc(c.nombre), sinFoco: true,
+      cuerpo: function () {
+        return '<div class="resumen-cfg"><div class="campo"><span>Pedidos que entran en el resumen</span><div class="lista-ped">' + todos.map(function (p) {
+          var pend = QG.pendiente(p);
+          return '<label class="check ped-check"><input type="checkbox" data-sel-ped="' + p.id + '"' + (sel[p.id] ? ' checked' : '') + '><span><b>' + nroPedido(p.numero) + '</b> · ' + fechaCorta(p.fechaEntrega || p.creado) + ' · ' + chipEstado(p.estado) + '</span>' +
+            '<span class="num der">' + pesos(p.total) + (pend ? '<br><small style="color:var(--danger)">debe ' + pesos(pend) + '</small>' : '<br><small class="muted">pagado</small>') + '</span></label>';
+        }).join('') + '</div><div class="fila" style="margin-top:6px"><button class="btn chico" type="button" data-todos="entregados">Entregados que deben</button><button class="btn chico" type="button" data-todos="deben">Todo lo que debe</button><button class="btn chico" type="button" data-todos="todos">Todos</button><button class="btn chico" type="button" data-todos="ninguno">Ninguno</button></div></div>' +
+          '<div class="campo"><span>Cómo se muestran los productos</span><div class="seg" role="group"><button type="button" data-modo-r="pedido" aria-pressed="' + (modo === 'pedido') + '">Separados por pedido</button><button type="button" data-modo-r="productos" aria-pressed="' + (modo === 'productos') + '">Productos sumados</button></div>' +
+          '<p class="muted" style="margin:6px 0 0;font-size:.8rem">"Productos sumados" junta el mismo producto de todos los pedidos en una sola línea (por ejemplo 3 + 5 bidones = 8).</p></div>' +
+          '<div id="rs-tot" class="resumen"></div></div>' +
+          '<div class="vista-previa" id="rs-prev"></div>';
+      },
+      pie: function () {
+        return '<a class="btn wa" id="rs-wa" target="_blank" rel="noopener" href="#">' + ic('wa') + 'WhatsApp</a>' +
+          (puede('pagos') ? '<button class="btn" type="button" id="rs-cobrar">' + ic('pesos') + 'Cobrar saldo</button>' : '') +
+          '<button class="btn pri" type="button" id="rs-imp">' + ic('imprimir') + 'Imprimir / PDF</button>';
+      },
+      alAbrir: function (r, m) {
+        var pintar = function () {
+          var lista = elegidos(), t = totalesResumen(lista);
+          $('#rs-prev', r).innerHTML = lista.length ? htmlResumen(c, lista, modo, numero) : '<p class="vacio">Elegí al menos un pedido.</p>';
+          $('#rs-tot', r).innerHTML = '<div class="r"><span>' + lista.length + ' pedido' + (lista.length === 1 ? '' : 's') + '</span><span>' + pesos(t.total) + '</span></div>' +
+            (t.pagado ? '<div class="r"><span>Pagado a cuenta</span><span>-' + pesos(t.pagado) + '</span></div>' : '') +
+            '<div class="r total"><span>Saldo a pagar</span><span>' + pesos(t.saldo) + '</span></div>';
+          $('#rs-wa', r).href = c.telefono ? linkWa(c.telefono, textoResumen(c, lista, numero)) : '#';
+          $('#rs-wa', r).toggleAttribute('hidden', !c.telefono || !lista.length);
+          $('#rs-imp', r).disabled = !lista.length;
+          var cb = $('#rs-cobrar', r); if (cb) cb.disabled = !t.saldo;
+          $$('[data-modo-r]', r).forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-modo-r') === modo)); });
+        };
+        r.addEventListener('change', function (e) {
+          var id = e.target.getAttribute('data-sel-ped');
+          if (id) { sel[id] = e.target.checked; numero = 0; pintar(); }
+        });
+        r.addEventListener('click', function (e) {
+          var mr = e.target.closest('[data-modo-r]');
+          if (mr) { modo = mr.getAttribute('data-modo-r'); guardarLocal('ac_resumen_modo', modo); pintar(); return; }
+          var tb = e.target.closest('[data-todos]');
+          if (tb) {
+            var k = tb.getAttribute('data-todos');
+            todos.forEach(function (p) { sel[p.id] = k === 'todos' || (k === 'deben' && QG.pendiente(p) > 0) || (k === 'entregados' && QG.pendiente(p) > 0 && p.estado === 'entregado'); });
+            $$('[data-sel-ped]', r).forEach(function (x) { x.checked = !!sel[x.getAttribute('data-sel-ped')]; });
+            numero = 0; pintar();
+          }
+        });
+        // el número se pide al imprimir: así todos los resúmenes impresos quedan numerados y registrados
+        var conNumero = function () {
+          if (numero) return Promise.resolve(numero);
+          return llamar('numerarResumen', { clienteId: c.id, pedidos: elegidos().map(function (p) { return p.id; }) }).then(function (res) { numero = res.resultado.numero; pintar(); return numero; });
+        };
+        $('#rs-imp', r).onclick = function () {
+          var b = this; b.disabled = true;
+          conNumero().then(function () { b.disabled = false; imprimir(htmlResumen(c, elegidos(), modo, numero), 'a4'); }, function (e) { b.disabled = false; toast(e.message, true); });
+        };
+        $('#rs-wa', r).addEventListener('click', function (e) {
+          if (numero) return;
+          // primero se numera y después se abre WhatsApp con el número ya puesto
+          e.preventDefault();
+          var ventana = window.open('', '_blank');
+          conNumero().then(function () {
+            var url = linkWa(c.telefono, textoResumen(c, elegidos(), numero));
+            if (ventana) ventana.location.href = url; else window.open(url, '_blank');
+          }, function (er) { if (ventana) ventana.close(); toast(er.message, true); });
+        });
+        var cb = $('#rs-cobrar', r);
+        if (cb) cb.onclick = function () {
+          var lista = elegidos().filter(function (p) { return QG.pendiente(p) > 0; });
+          modalPago({ clienteId: c.id, pedidoId: lista.length ? lista[0].id : '' });
+        };
+        pintar();
+      }
+    });
+  }
+  ACT.resumen = function (id) { modalResumen(id); };
   function modalRemito(id) {
     var formato = D.config.formatoRemito === 'ticket' ? 'ticket' : 'a4';
     abrirModal({
@@ -1251,7 +1400,8 @@ var LOGO_URL = 'logo.png';
           '<div class="kpi"><small>Límite de crédito</small><b>' + (num(c.limiteCredito) ? pesos(c.limiteCredito) : 'Sin límite') + '</b><em>Lista ' + (c.tipoPrecio === 'minorista' ? 'minorista' : 'mayorista') + '</em></div></div>' +
           '<div class="muted" style="font-size:.86rem">' + esc([c.direccion, c.localidad].filter(Boolean).join(', ') || 'Sin dirección') + (zona ? ' · ' + esc(zona.nombre) + (num(c.distanciaKm) ? ' (' + cant(c.distanciaKm) + ' km)' : '') : '') + (c.telefono ? ' · Tel. ' + esc(c.telefono) : '') + (c.notas ? '<br>' + esc(c.notas) : '') + '</div>' +
           botonesLlegar(c) +
-          '<section><h3 style="font-size:.9rem;margin-bottom:6px">Pedidos</h3>' + (peds.length ? '<div class="tabla-wrap"><table class="t"><thead><tr><th>N°</th><th>Fecha</th><th>Estado</th><th class="der">Total</th><th class="der">Saldo</th></tr></thead><tbody>' +
+          '<section><div class="fila" style="justify-content:space-between;margin-bottom:6px"><h3 style="font-size:.9rem;margin:0">Pedidos</h3>' +
+          (verPrecios() && peds.length > 1 ? '<button class="btn chico" type="button" data-act="resumen" data-id="' + c.id + '">' + ic('imprimir') + 'Resumen de cuenta (unificar pedidos)</button>' : '') + '</div>' + (peds.length ? '<div class="tabla-wrap"><table class="t"><thead><tr><th>N°</th><th>Fecha</th><th>Estado</th><th class="der">Total</th><th class="der">Saldo</th></tr></thead><tbody>' +
             peds.map(function (p) {
               return '<tr class="clic" data-act="verPedido" data-id="' + p.id + '"><td class="mono">' + nroPedido(p.numero) + '</td><td class="num">' + fechaCorta(p.creado) + '</td><td>' + chipEstado(p.estado) + '</td><td class="der num">' + pesos(p.total) + '</td><td class="der num">' + (QG.pendiente(p) ? pesos(QG.pendiente(p)) : '—') + '</td></tr>';
             }).join('') + '</tbody></table></div>' : '<p class="vacio">Todavía no tiene pedidos.</p>') + '</section>' +
@@ -1344,6 +1494,7 @@ var LOGO_URL = 'logo.png';
         return '<tr><td><button class="lnk" type="button" data-act="verCliente" data-id="' + d.c.id + '">' + esc(d.c.nombre) + '</button>' + (excedido ? ' <span class="chip plano pg-pendiente">Límite superado</span>' : '') + '<br><small class="muted">' + esc(d.c.telefono) + '</small></td>' +
           '<td class="der num">' + d.deuda.pedidos + '</td><td class="der"><span class="chip plano ' + clase + '">' + d.dias + ' días</span></td><td class="der num"><b>' + pesos(d.deuda.entregado) + '</b></td>' +
           '<td class="acc"><a class="btn chico wa" target="_blank" rel="noopener" href="' + esc(linkWa(d.c.telefono, textoRecordatorio(d.c, d.deuda))) + '">' + ic('wa') + '<span class="solo-pc">Recordar</span></a> ' +
+          (d.deuda.pedidos > 1 ? '<button class="btn chico" type="button" data-act="resumen" data-id="' + d.c.id + '" title="Un solo comprobante con todos sus pedidos">' + ic('imprimir') + '<span class="solo-pc">Resumen</span></button> ' : '') +
           (puede('pagos') ? '<button class="btn chico" type="button" data-act="cobrar" data-id="' + d.c.id + '">' + ic('pesos') + '<span class="solo-pc">Cobrar</span></button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>' : '<p class="vacio">Nadie te debe. Todo cobrado.</p>') + '</section>';
     var ultimos = D.pagos.slice().sort(function (a, b) { return a.creado < b.creado ? 1 : -1; }).slice(0, 15);
@@ -2974,7 +3125,8 @@ var LOGO_URL = 'logo.png';
     return '<div class="etq' + clases + '" style="width:' + m.w + 'mm;height:' + m.h + 'mm;--f:' + m.f + ';--lc:' + lineas + ';--etq-c:' + esc(e.color || '#1e40af') + ';--etq-t:' + textoSobre(e.color) + '">' +
       '<img class="etq-logo" src="' + LOGO_URL + '" alt="">' +
       '<div class="etq-banda"><div class="etq-nombre' + claseNombre + '">' + esc(e.nombre) + '</div>' + (e.subtitulo ? '<div class="etq-sub">' + esc(e.subtitulo) + '</div>' : '') + '</div>' +
-      '<div class="etq-textos"><div class="etq-sec"><b>Modo de uso</b><p>' + esc(e.uso) + '</p></div>' +
+      '<div class="etq-textos"><div class="etq-sec"><b>Modo de us
+o</b><p>' + esc(e.uso) + '</p></div>' +
       '<div class="etq-sec"><b>Precauciones</b><p>' + esc(e.precauciones) + '</p></div></div>' +
       '<div class="etq-alerta"><b>⚠ MANTENER FUERA DEL ALCANCE DE LOS NIÑOS · NO INGERIR</b><span><i class="etq-cons">Conservar en su envase original, bien cerrado. </i>Intoxicaciones: 0800-333-0160</span></div>' +
       '<div class="etq-pie"><span>' + esc(cfg.empresa || 'Akuma Clean') + (cfg.telefono ? ' · Tel. ' + esc(cfg.telefono) : '') + '</span><span class="etq-lote">' + (S.etq.lote ? 'Lote ' + esc(S.etq.lote) : 'Lote ____') + ' Venc. ____</span></div>' +
@@ -3920,3 +4072,4 @@ var LOGO_URL = 'logo.png';
   iniciar();
 })();
 // FIN DE app.js · Akuma Clean by AkumaNet · Autor: Juan Carlos Ojeda · Tel. 11 6033-1552
+Mostrando app.js
