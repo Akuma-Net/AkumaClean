@@ -728,6 +728,30 @@ var QG = (function () {
       return { mensaje: aplicados > 1 ? 'Pago repartido en ' + aplicados + ' pedidos.' : 'Pago registrado.' };
     });
   };
+  /**
+   * Resumen de cuenta: junta varios pedidos de un cliente en un solo comprobante.
+   * Los pedidos siguen separados (historial, stock y entregas intactos); acá
+   * solo se le da un número propio al comprobante y queda en la actividad.
+   */
+  acciones.numerarResumen = function (db, req, u) {
+    exigir(u, 'precios');
+    var d = req.datos || {};
+    var cli = porId(db.all('Clientes'), d.clienteId);
+    if (!cli) throw err('VALIDACION', 'El cliente ya no existe.');
+    var pedidos = db.all('Pedidos');
+    var incl = (Array.isArray(d.pedidos) ? d.pedidos : []).slice(0, 200).map(function (id) { return porId(pedidos, id); })
+      .filter(function (p) { return p && p.clienteId === cli.id && p.estado !== 'anulado'; });
+    if (!incl.length) throw err('VALIDACION', 'Elegí al menos un pedido del cliente.');
+    var ultimo = 0;
+    db.all('Config').forEach(function (c) { if (c.id === 'ultimoResumen') ultimo = num(c.valor); });
+    var numero = ultimo + 1;
+    db.put('Config', { id: 'ultimoResumen', valor: String(numero) });
+    var total = incl.reduce(function (s0, p) { return s0 + num(p.total); }, 0), saldo = incl.reduce(function (s0, p) { return s0 + pendiente(p); }, 0);
+    return {
+      numero: numero,
+      log: 'Emitió el resumen N° ' + String(numero).padStart(4, '0') + ' a ' + cli.nombre + ' por ' + plata(total) + ' (saldo ' + plata(saldo) + ') · pedidos ' + incl.map(function (p) { return nroP(p.numero); }).join(', ')
+    };
+  };
   acciones.borrarPago = function (db, req, u) {
     if (u.rol !== 'admin') throw err('SIN_PERMISO', 'Solo el administrador puede eliminar pagos.');
     return db.lock(function () {
@@ -2059,3 +2083,4 @@ var QG = (function () {
   };
 })();
 // FIN DE Core.gs · Akuma Clean by AkumaNet · Autor: Juan Carlos Ojeda · Tel. 11 6033-1552
+Mostrando app.js
