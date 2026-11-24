@@ -598,4 +598,16 @@ tr.fo-total.ok td:nth-child(2) b { color: var(--ok); }
 tr.fo-total.mal td { color: var(--danger); }
 .completa { border: 1px dashed var(--border); background: none; color: var(--muted); border-radius: 999px; font: inherit; font-size: .72rem; padding: 1px 8px; margin-top: 4px; cursor: pointer; }
 .completa.si { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
+/* ---------- Resumen de cuenta (varios pedidos en un comprobante) ---------- */
+.resumen-cfg { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 12px; }
+.resumen-cfg .resumen { grid-column: 2; }
+.resumen-cfg > .campo:first-child { grid-row: span 2; }
+.lista-ped { display: grid; gap: 4px; max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; }
+.ped-check { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; }
+.ped-check:hover { background: var(--surface-2); }
+.doc tr.sub-ped td { background: #f1f3f7; font-size: 12px; padding-top: 7px; }
+.doc tr.tot-ped td { font-weight: 600; border-bottom: 1.5px solid #555; }
+.doc tr.extra td { color: #444; }
+@media (max-width: 860px) { .resumen-cfg { grid-template-columns: 1fr; } .resumen-cfg .resumen { grid-column: auto; } .resumen-cfg > .campo:first-child { grid-row: auto; } }
 /* FIN DE estilos.css · Akuma Clean by AkumaNet */
+Mostrando app.js
