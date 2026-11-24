@@ -610,4 +610,3 @@ tr.fo-total.mal td { color: var(--danger); }
 .doc tr.extra td { color: #444; }
 @media (max-width: 860px) { .resumen-cfg { grid-template-columns: 1fr; } .resumen-cfg .resumen { grid-column: auto; } .resumen-cfg > .campo:first-child { grid-row: auto; } }
 /* FIN DE estilos.css · Akuma Clean by AkumaNet */
-Mostrando app.js
