@@ -2083,4 +2083,3 @@ var QG = (function () {
   };
 })();
 // FIN DE Core.gs · Akuma Clean by AkumaNet · Autor: Juan Carlos Ojeda · Tel. 11 6033-1552
-Mostrando app.js
