@@ -3125,8 +3125,7 @@ var LOGO_URL = 'logo.png';
     return '<div class="etq' + clases + '" style="width:' + m.w + 'mm;height:' + m.h + 'mm;--f:' + m.f + ';--lc:' + lineas + ';--etq-c:' + esc(e.color || '#1e40af') + ';--etq-t:' + textoSobre(e.color) + '">' +
       '<img class="etq-logo" src="' + LOGO_URL + '" alt="">' +
       '<div class="etq-banda"><div class="etq-nombre' + claseNombre + '">' + esc(e.nombre) + '</div>' + (e.subtitulo ? '<div class="etq-sub">' + esc(e.subtitulo) + '</div>' : '') + '</div>' +
-      '<div class="etq-textos"><div class="etq-sec"><b>Modo de us
-o</b><p>' + esc(e.uso) + '</p></div>' +
+      '<div class="etq-textos"><div class="etq-sec"><b>Modo de uso</b><p>' + esc(e.uso) + '</p></div>' +
       '<div class="etq-sec"><b>Precauciones</b><p>' + esc(e.precauciones) + '</p></div></div>' +
       '<div class="etq-alerta"><b>⚠ MANTENER FUERA DEL ALCANCE DE LOS NIÑOS · NO INGERIR</b><span><i class="etq-cons">Conservar en su envase original, bien cerrado. </i>Intoxicaciones: 0800-333-0160</span></div>' +
       '<div class="etq-pie"><span>' + esc(cfg.empresa || 'Akuma Clean') + (cfg.telefono ? ' · Tel. ' + esc(cfg.telefono) : '') + '</span><span class="etq-lote">' + (S.etq.lote ? 'Lote ' + esc(S.etq.lote) : 'Lote ____') + ' Venc. ____</span></div>' +
